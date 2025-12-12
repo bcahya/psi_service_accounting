@@ -1,0 +1,1 @@
+java -jar -Xms2G -Xmx4G D:\MSTR\cdc/cdc-0.0.1-SNAPSHOT.jar --spring.config.location=D:\MSTR\cdc/app.properties
