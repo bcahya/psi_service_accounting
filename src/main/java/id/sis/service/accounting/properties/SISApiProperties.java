@@ -16,6 +16,15 @@ public class SISApiProperties {
     Integer ad_user_id;
     Integer c_charge_id;
     Integer c_doctype_id;
+    String dir_cimb;
+
+	public String getDir_cimb() {
+		return dir_cimb;
+	}
+
+	public void setDir_cimb(String dir_cimb) {
+		this.dir_cimb = dir_cimb;
+	}
 
 	public String getDirectory() {
 		return directory;
