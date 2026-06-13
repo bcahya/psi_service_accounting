@@ -43,7 +43,7 @@ public class SISGlobalExecute {
 	BigDecimal docCount = SISUtil.getBigDecimal(u.getRefNoTime());
 	
 	@Autowired
-	@Qualifier("jdbcTemplateCdcSource")
+	@Qualifier("jdbcTemplateSource")
 	private JdbcTemplate source;
 
 	@Autowired
