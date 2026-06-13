@@ -25,7 +25,7 @@ public class SISServiceImpl{
     @Autowired
     SISApi sis;
 
-    @Scheduled(cron = "0 */5 * * * *")
+    @Scheduled(cron = "0 */10 * * * *")
 	public SISResponse processMT940() throws Exception {
         logger.info("execute processMT940");
         return ex.processMT940();
