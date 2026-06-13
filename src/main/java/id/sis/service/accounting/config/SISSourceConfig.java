@@ -2,40 +2,49 @@ package id.sis.service.accounting.config;
 
 import javax.sql.DataSource;
 
-import org.postgresql.xa.PGXADataSource;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import com.atomikos.jdbc.AtomikosDataSourceBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 import id.sis.service.accounting.properties.SISSourceDataSourceProperties;
 
 @Configuration
-@EnableConfigurationProperties(SISSourceDataSourceProperties.class)
 public class SISSourceConfig {
-    @Autowired
-    SISSourceDataSourceProperties sisSourceDataSourceProperties;
 
-    @Bean(name = "sisSourceDataSource")
-    public DataSource sisDataSource() {
-    	PGXADataSource pgXADataSource = new PGXADataSource();
-		 pgXADataSource.setUrl(sisSourceDataSourceProperties.getUrl());
-		 pgXADataSource.setPassword(sisSourceDataSourceProperties.getPassword());
-		 pgXADataSource.setUser(sisSourceDataSourceProperties.getUsername());
-	
-		 AtomikosDataSourceBean xaDataSource = new AtomikosDataSourceBean();
-		 xaDataSource.setXaDataSource(pgXADataSource);
-		 xaDataSource.setUniqueResourceName("xads1");
-		 xaDataSource.setMaxPoolSize(Integer.valueOf(sisSourceDataSourceProperties.getMaxpool()));
-		 return xaDataSource;
+    @Bean(name = "sourceDataSource")
+    public DataSource sourceDataSource(SISSourceDataSourceProperties prop) {
+
+        HikariDataSource ds = new HikariDataSource();
+        ds.setJdbcUrl(prop.getUrl());
+        ds.setUsername(prop.getUsername());
+        ds.setPassword(prop.getPassword());
+
+        ds.setMaximumPoolSize(prop.getMaxPoolSize());
+        ds.setMinimumIdle(prop.getMinIdle());
+        ds.setConnectionTimeout(prop.getConnectionTimeout());
+        ds.setIdleTimeout(prop.getIdleTimeout());
+        ds.setMaxLifetime(prop.getMaxLifetime());
+
+        ds.setAutoCommit(false); // PENTING untuk @Transactional
+
+        return ds;
     }
 
-    @Bean(name = "jdbcTemplateCdcSource")
-    public JdbcTemplate jdbcTemplate(@Qualifier(value = "sisSourceDataSource") DataSource dataSource) {
-        return new JdbcTemplate(dataSource);
+    @Bean(name = "jdbcTemplateSource")
+    public JdbcTemplate jdbcTemplateSource(
+            @Qualifier("sourceDataSource") DataSource ds) {
+        return new JdbcTemplate(ds);
+    }
+
+    @Bean(name = "sourceTxManager")
+    @Primary
+    public PlatformTransactionManager sourceTxManager(
+            @Qualifier("sourceDataSource") DataSource ds) {
+        return new DataSourceTransactionManager(ds);
     }
 }
