@@ -167,6 +167,7 @@ public class SISGlobalExecute {
 	        map.put("list_error", listErr);
 	        resultList.add(map);
 			response = SISResponse.successResponse(resultList);
+			logger.info(listErr.toString());
 		} catch (Exception e) {
 			response = SISResponse.errorResponse(e.getMessage());
 		}
