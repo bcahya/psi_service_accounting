@@ -14,15 +14,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.DefaultTransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import id.sis.service.accounting.properties.SISApiProperties;
 
@@ -305,7 +305,15 @@ public class SISUtil {
         	DefaultTransactionDefinition def = new DefaultTransactionDefinition();
 //    		TransactionStatus status = transactionManager.getTransaction(def);
     		try {
-        		List<Integer> listMT = action.apply(filePath);// exec bispro
+    			TransactionTemplate tt = new TransactionTemplate(transactionManager);
+				List<Integer> listMT = tt.execute(s -> {
+					List<Integer> listUpdate = new ArrayList<>();
+					try {
+						listUpdate = action.apply(filePath);;
+					} catch (Exception e) {
+					}
+					return listUpdate;
+				});
         		listBSID.addAll(listMT);
 //        		transactionManager.commit(status);
         		
@@ -539,6 +547,7 @@ public class SISUtil {
         	return;
         }
         c_bankstatementline_id = getNextSysID("C_BankStatementLine");
+        System.out.println("c_bankstatementline_id: "+c_bankstatementline_id);
         int lineNo = ((int)getObject("c_bankstatementline", "c_bankstatement_id", "coalesce((max(line)),0)::int lineno", c_bankstatement_id))+10;
     	sql =
     		"insert into c_bankstatementline ( "

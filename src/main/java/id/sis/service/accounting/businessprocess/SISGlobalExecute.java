@@ -1,8 +1,7 @@
 package id.sis.service.accounting.businessprocess;
 
-import java.io.FileInputStream;
-import java.io.InputStream;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Timestamp;
@@ -167,6 +166,7 @@ public class SISGlobalExecute {
 	        map.put("list_error", listErr);
 	        resultList.add(map);
 			response = SISResponse.successResponse(resultList);
+			logger.info(listErr.toString());
 		} catch (Exception e) {
 			response = SISResponse.errorResponse(e.getMessage());
 		}
@@ -178,8 +178,16 @@ public class SISGlobalExecute {
 			) throws Exception{
 		u = new SISUtil(source, sisApiProperties, transactionManager);
 		
-		String mt940Text = Files.readString(Paths.get(filePath));
-
+		String mt940Text = "";
+		try {
+			mt940Text = Files.readString(Paths.get(filePath));
+		} catch (Exception e) {
+			mt940Text = Files.readString(
+				    Paths.get(filePath),
+				    StandardCharsets.ISO_8859_1
+				);
+		}
+		
 		String[] rawMessages = mt940Text.split("-\\}");
 
         List<MT940> listMT940 = new ArrayList<>();
