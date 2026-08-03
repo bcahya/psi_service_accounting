@@ -547,7 +547,6 @@ public class SISUtil {
         	return;
         }
         c_bankstatementline_id = getNextSysID("C_BankStatementLine");
-        System.out.println("c_bankstatementline_id: "+c_bankstatementline_id);
         int lineNo = ((int)getObject("c_bankstatementline", "c_bankstatement_id", "coalesce((max(line)),0)::int lineno", c_bankstatement_id))+10;
     	sql =
     		"insert into c_bankstatementline ( "
