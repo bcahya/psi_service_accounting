@@ -3,9 +3,11 @@ package id.sis.service.accounting.businessprocess;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,8 +31,11 @@ import com.prowidesoftware.swift.model.mt.mt9xx.MT940;
 import id.sis.service.accounting.properties.SISApiProperties;
 import id.sis.service.accounting.properties.SISIdProperties;
 import id.sis.service.accounting.response.SISResponse;
+import id.sis.service.accounting.utils.SISConstants;
 import id.sis.service.accounting.utils.SISUtil;
 import id.sis.service.accounting.utils.SIS_BisproUtils;
+import id.sis.service.accounting.utils.SIS_FleetReportParser;
+import id.sis.service.accounting.utils.SIS_FleetReportParser.FleetTransaction;
 
 @Component
 public class SISGlobalExecute {
@@ -256,10 +261,121 @@ public class SISGlobalExecute {
 	        			mt940EndAmt, 
 	        			now, 
 	        			amt, 
-	        			count
+	        			count,
+	        			0,
+	        			0,
+	        			false
 				);
 	        }
         }
+        return listBSID;
+    }
+	
+	public SISResponse processFleetReport() throws Exception {
+		u = new SISUtil(source, sisApiProperties, transactionManager);
+		logger.info("[SIS] processFleetReport");
+		SISResponse response = new SISResponse();
+		List<Map<String, Object>> resultList = new ArrayList<>();
+		try {
+			List<Integer> listBSID = new ArrayList<>();
+	        List<String> listErr = new ArrayList<>();
+	        List<Integer> listID = u.execDir(listErr, sisApiProperties.getDirectory_fleet(), dirs -> {
+	        	return readFleetReport(dirs);
+			});
+	        Set<Integer> uniqueSet = new HashSet<>(listID);
+	        listBSID = new ArrayList<>(uniqueSet);
+	        Map<String, Object> map = new LinkedHashMap<String, Object>();
+	        map.put("list_bankstatement_id", listBSID);
+	        map.put("list_error", listErr);
+	        resultList.add(map);
+			response = SISResponse.successResponse(resultList);
+			logger.info(listErr.toString());
+		} catch (Exception e) {
+			response = SISResponse.errorResponse(e.getMessage());
+		}
+		return response;
+	}
+	
+	List<Integer> readFleetReport(
+			String filePath
+			) throws Exception{
+		u = new SISUtil(source, sisApiProperties, transactionManager);
+		
+		List<FleetTransaction> listFleet = SIS_FleetReportParser.parse(Path.of(filePath));
+		
+		HashMap<String, BigDecimal> mapBalance = new HashMap<>();
+		HashMap<String, BigDecimal> mapEnd = new HashMap<>();
+		HashMap<Integer, BigDecimal> mapTotal = new HashMap<>();
+        List<Integer> listBSID = new ArrayList<Integer>();
+        for (FleetTransaction fleet: listFleet) {
+        	String accountNo = fleet.getNoKartu();
+        	int c_bankaccount_id = u.getBankAccountID(accountNo);
+        	if (c_bankaccount_id <= 0) {
+	        	throw new Exception("Bank Account "+accountNo+" not found!");
+	        }
+        	BigDecimal amt = fleet.getNominal().negate();
+	        String dates = SISUtil.getStringDate(fleet.getTimestamp());
+	        String key = accountNo + ";" + dates;
+	        if (!mapTotal.containsKey(c_bankaccount_id)) {
+	        	mapTotal.put(c_bankaccount_id, u.getCurrentBalance(c_bankaccount_id));
+	        }
+	        if (!mapEnd.containsKey(key)) {
+	        	mapEnd.put(key, mapTotal.get(c_bankaccount_id));
+	        }
+	        if (!mapBalance.containsKey(key)) {
+	        	mapBalance.put(key, BigDecimal.ZERO);
+	        }
+	        mapTotal.put(c_bankaccount_id, mapTotal.get(c_bankaccount_id).add(amt));
+	        mapEnd.put(key, mapEnd.get(key).add(amt));
+	        mapBalance.put(key, mapBalance.get(key).add(amt));
+	    }
+        
+        int count = 0;
+        for (FleetTransaction fleet: listFleet) {
+        	BigDecimal amt = fleet.getNominal().negate();
+	        String accountNo = fleet.getNoKartu();
+        	int c_bankaccount_id = u.getBankAccountID(accountNo);
+	        if (c_bankaccount_id <= 0) {
+	        	throw new Exception("Bank Account "+accountNo+" not found!");
+	        }
+	        String dates = SISUtil.getStringDate(fleet.getTimestamp());
+	        String key = accountNo + ";" + dates;
+	        
+	        BigDecimal endAmt = mapEnd.get(key);
+	        BigDecimal diffAmt = mapBalance.get(key);
+            BigDecimal beginAmt = endAmt.add(diffAmt);
+            
+            String docno = u.getRefNoTime();
+            count += 1;
+            Timestamp ts = fleet.getTimestamp();
+            String desc = SISUtil.getStringDateTime(ts)+" "+fleet.getTerminal();
+            Timestamp now = u.getCurrentTime();
+        	int c_doctype_id = u.getIntSysconfig(SISConstants.SIS_DEFAULT_DOC_TYPE_FLEET_ID, true);
+        	int c_charge_id = u.getIntSysconfig(SISConstants.SIS_FLEET_CHARGE_ID, true);
+        	Object oCh = u.getObject("c_doctype", "c_doctype_id", "sis_fleetcharge_id", c_doctype_id);
+        	if (oCh != null) {
+        		c_charge_id = (int)oCh;
+        	}
+        	ts = SISUtil.removeTime(ts);
+        	u.generateBS(
+        			listBSID, 
+        			ts, 
+        			c_bankaccount_id, 
+        			diffAmt, 
+        			docno, 
+        			desc, 
+        			beginAmt, 
+        			endAmt, 
+        			now, 
+        			amt, 
+        			count,
+        			c_doctype_id,
+        			c_charge_id,
+        			true
+			);
+        }
+        
+        
         return listBSID;
     }
 	

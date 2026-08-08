@@ -12,9 +12,9 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -97,6 +97,11 @@ public class SISUtil {
 
 	public static String getStringDate(Timestamp date) {
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+		return sdf.format(date);
+	}
+	
+	public static String getStringDateTime(Timestamp date) {
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		return sdf.format(date);
 	}
 
@@ -248,7 +253,7 @@ public class SISUtil {
 			String colName,
 			Object value
 			) {
-		Object id = 0;
+		Object id = null;
 		String cols = "";
 		if (value instanceof String) {
 			cols += "'"+value+"'";
@@ -309,21 +314,21 @@ public class SISUtil {
 				List<Integer> listMT = tt.execute(s -> {
 					List<Integer> listUpdate = new ArrayList<>();
 					try {
-						listUpdate = action.apply(filePath);;
+						listUpdate = action.apply(filePath);
+						
+		        		//move file to done
+				        String dirDone = dirPath+"done/";
+				        Path donePath = Paths.get(dirDone);
+				        Files.createDirectories(donePath);
+				        Path sourcePath = Paths.get(filePath);
+				        Path targetPath = Paths.get(dirDone+file.getName());
+				        Files.move(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
 					} catch (Exception e) {
+						listErr.add("filename "+file.getName()+" - "+e.getMessage());
 					}
 					return listUpdate;
 				});
-        		listBSID.addAll(listMT);
-//        		transactionManager.commit(status);
-        		
-        		//move file to done
-		        String dirDone = dirPath+"done/";
-		        Path donePath = Paths.get(dirDone);
-		        Files.createDirectories(donePath);
-		        Path sourcePath = Paths.get(filePath);
-		        Path targetPath = Paths.get(dirDone+file.getName());
-		        Files.move(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+				listBSID.addAll(listMT);
 		        
         	} catch (Exception e) {
         		listErr.add("filename "+file.getName()+" - "+e.getMessage());
@@ -386,7 +391,8 @@ public class SISUtil {
 	
 	public int getBankStatementID(
 			Timestamp ts,
-			int c_bankaccount_id
+			int c_bankaccount_id,
+			int c_doctype_id
 			) {
 		int id = 0;
 		String sql = 
@@ -395,7 +401,7 @@ public class SISUtil {
 			+ "from c_bankstatement bs "
 			+ "where bs.ad_client_id = "+sisApiProperties.getAd_client_id()+" "
 			+ "and bs.isactive = 'Y' "
-			+ "and bs.c_doctype_id = "+sisApiProperties.getC_doctype_id()+" "
+			+ "and bs.c_doctype_id = "+c_doctype_id+" "
 			+ "and trunc(bs.statementdate) = trunc('"+SISUtil.getStringDate(ts)+"'::date) "
 			+ "and bs.c_bankaccount_id = "+c_bankaccount_id+" "
 			+ "and bs.docstatus not in ('IP','CO') "
@@ -408,6 +414,59 @@ public class SISUtil {
 			}
 		}
 		return id;
+	}
+	
+	public BigDecimal getCurrentBalance(
+			int c_bankaccount_id
+			) {
+		BigDecimal amt = BigDecimal.ZERO;
+		String sql = 
+			"select "
+			+ "	ba.currentbalance "
+			+ "from c_bankaccount ba "
+			+ "where ba.c_bankaccount_id = "+c_bankaccount_id+" "
+	        ;
+		List<Map<String, Object>> resultList = source.queryForList(sql);
+		if (!resultList.isEmpty()) {
+			for (Map<String, Object> map: resultList) {
+				amt = getBigDecimal(map.get("currentbalance"));
+				break;
+			}
+		}
+		return amt;
+	}
+	
+	public String getStringSysconfig(
+			String name,
+			boolean isThrowError
+			) throws Exception {
+		String val = "";
+		String sql = 
+			"select "
+			+ "	value "
+			+ "from ad_sysconfig sc "
+			+ "where sc.ad_client_id = "+sisApiProperties.getAd_client_id()+" "
+			+ "and sc.name = '"+name+"' "
+			+ "and sc.isactive = 'Y' "
+			+ "fetch first 1 rows only "
+	        ;
+		List<Map<String, Object>> resultList = source.queryForList(sql);
+		if (!resultList.isEmpty()) {
+			for (Map<String, Object> map: resultList) {
+				val = (String)map.get("value");
+				break;
+			}
+		} else {
+			throw new Exception("System Configurator "+name +" not configured yet!");
+		}
+		return val;
+	}
+	
+	public Integer getIntSysconfig(
+			String name,
+			boolean isThrowError
+			) throws Exception {
+		return Integer.valueOf(getStringSysconfig(name, isThrowError));
 	}
 	
 	public int getBankAccountID(
@@ -472,10 +531,22 @@ public class SISUtil {
 			BigDecimal mt940EndAmt,
 			Timestamp now,
 			BigDecimal amt,
-			int count
+			int count,
+			int c_doctype_id,
+			int c_charge_id,
+			boolean isfleet
 			) {
-		int c_bankstatement_id = getBankStatementID(ts, c_bankaccount_id);
-    	BigDecimal beginAmt = SISUtil.getBigDecimal(getObject("c_bankaccount", "c_bankaccount_id", "currentbalance", c_bankaccount_id));
+		if (c_doctype_id <= 0) {
+			c_doctype_id = sisApiProperties.getC_doctype_id();
+		}
+		if (c_charge_id <= 0) {
+			c_charge_id = sisApiProperties.getC_charge_id();
+		}
+		int c_bankstatement_id = getBankStatementID(ts, c_bankaccount_id, c_doctype_id);
+		BigDecimal beginAmt = mt940BeginAmt;
+		if (!isfleet) {
+			beginAmt = SISUtil.getBigDecimal(getObject("c_bankaccount", "c_bankaccount_id", "currentbalance", c_bankaccount_id));
+		}
     	BigDecimal endAmt = beginAmt.add(diffAmt);
     	if (c_bankstatement_id <= 0) {
     		c_bankstatement_id = getNextSysID("C_BankStatement");
@@ -536,7 +607,7 @@ public class SISUtil {
                     now,
                     sisApiProperties.getAd_user_id(),
                     sisApiProperties.getAd_user_id(),
-                    sisApiProperties.getC_doctype_id(),
+                    c_doctype_id,
                     "N"
                 );
     	}	
@@ -592,7 +663,7 @@ public class SISUtil {
                 amt,
                 new BigDecimal(0),
                 amt,
-                sisApiProperties.getC_charge_id(),
+                c_charge_id,
                 new BigDecimal(0),
                 now,
                 now,
@@ -600,5 +671,17 @@ public class SISUtil {
                 sisApiProperties.getAd_user_id(),
                 UUID.randomUUID()
             );
+	}
+	
+	public static Timestamp removeTime(Timestamp timestamp) {
+	    Calendar cal = Calendar.getInstance();
+	    cal.setTime(timestamp);
+
+	    cal.set(Calendar.HOUR_OF_DAY, 0);
+	    cal.set(Calendar.MINUTE, 0);
+	    cal.set(Calendar.SECOND, 0);
+	    cal.set(Calendar.MILLISECOND, 0);
+
+	    return new Timestamp(cal.getTimeInMillis());
 	}
 }

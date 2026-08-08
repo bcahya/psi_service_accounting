@@ -54,4 +54,20 @@ public class SISController {
 		return response;
 	}
 	
+	@ResponseBody
+	@RequestMapping(value = "/processFleetReport", method = RequestMethod.POST)
+	SISResponse processFleetReport(
+//			@RequestParam("m_inventory_id") Integer m_inventory_id
+			) {
+		SISResponse response = new SISResponse();
+
+		try {
+			response = sisService.processFleetReport();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		return response;
+	}
+	
 }
