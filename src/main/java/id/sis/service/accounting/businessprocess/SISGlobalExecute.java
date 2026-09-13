@@ -7,12 +7,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -300,83 +302,291 @@ public class SISGlobalExecute {
 			String filePath
 			) throws Exception{
 		u = new SISUtil(source, sisApiProperties, transactionManager);
-		
+		int chargeTolID = u.getIntSysconfig(SISConstants.SIS_FLEET_CHARGE_TOL_ID, true);
+    	int chargeBBMID = u.getIntSysconfig(SISConstants.SIS_FLEET_CHARGE_BBM_ID, true);
+    	int pricelistID = u.getIntSysconfig(SISConstants.SIS_FLEET_PRICE_LIST_ID, true);
+    	int taxID = u.getIntSysconfig(SISConstants.SIS_FLEET_TAX_ID, true);
+    	int paymentTermID = u.getIntSysconfig(SISConstants.SIS_FLEET_PAYMENT_TERM_ID, true);
+    	int dtID = u.getIntSysconfig(SISConstants.SIS_FLEET_DOC_TYPE_DOC_ACTION, true);
+    	int docAction = u.getIntSysconfig(SISConstants.SIS_FLEET_DOC_TYPE_DOC_ACTION, true);
+    	int currencyID = u.getIntSysconfig(SISConstants.SIS_FLEET_CURRENCY_ID, true);
+    	int userID = u.getIntSysconfig(SISConstants.SIS_FLEET_USER_ID, true);
+    	
 		List<FleetTransaction> listFleet = SIS_FleetReportParser.parse(Path.of(filePath));
 		
-		HashMap<String, BigDecimal> mapBalance = new HashMap<>();
-		HashMap<String, BigDecimal> mapEnd = new HashMap<>();
-		HashMap<Integer, BigDecimal> mapTotal = new HashMap<>();
-        List<Integer> listBSID = new ArrayList<Integer>();
-        for (FleetTransaction fleet: listFleet) {
+		LinkedHashMap<String, Integer> mapBA = new LinkedHashMap<>();
+		LinkedHashMap<String, LinkedHashMap<String, Object>> mapFleet = new LinkedHashMap<>();
+		List<Integer> listBSID = new ArrayList<Integer>();
+		String del = ";";
+    	for (FleetTransaction fleet: listFleet) {
         	String accountNo = fleet.getNoKartu();
-        	int c_bankaccount_id = u.getBankAccountID(accountNo);
-        	if (c_bankaccount_id <= 0) {
-	        	throw new Exception("Bank Account "+accountNo+" not found!");
-	        }
-        	BigDecimal amt = fleet.getNominal().negate();
+        	int c_bankaccount_id = 0;
+        	if (!mapBA.containsKey(accountNo)) {
+	        	c_bankaccount_id = u.getBankAccountID(accountNo);
+	        	if (c_bankaccount_id <= 0) {
+		        	throw new Exception("Bank Account "+accountNo+" not found!");
+		        }
+        	} else {
+        		c_bankaccount_id = mapBA.get(accountNo);
+        	}
+        		
+        	BigDecimal amt = fleet.getNominal();
 	        String dates = SISUtil.getStringDate(fleet.getTimestamp());
-	        String key = accountNo + ";" + dates;
-	        if (!mapTotal.containsKey(c_bankaccount_id)) {
-	        	mapTotal.put(c_bankaccount_id, u.getCurrentBalance(c_bankaccount_id));
+	        boolean isBBM = fleet.getTerminal().toLowerCase().contains("spbu");
+	        String key = c_bankaccount_id + del + dates;
+	        if (!mapFleet.containsKey(key)) {
+	        	LinkedHashMap<String, Object> mapDetail = new LinkedHashMap<>();
+	        	mapDetail.put("bbm", BigDecimal.ZERO);
+	        	mapDetail.put("tol", BigDecimal.ZERO);
+	        	mapDetail.put("total", BigDecimal.ZERO);
+	        	mapDetail.put("desc", "");
+	        	mapDetail.put("desc_bbm", "");
+	        	mapDetail.put("desc_tol", "");
+	        	mapFleet.put(key, mapDetail);
 	        }
-	        if (!mapEnd.containsKey(key)) {
-	        	mapEnd.put(key, mapTotal.get(c_bankaccount_id));
+	        LinkedHashMap<String, Object> mapDetail = mapFleet.get(key);
+	        String desc = String.valueOf(mapDetail.get("desc"));
+	        if (!SISUtil.cekIsNull(desc)) {
+	        	desc += ", ";
 	        }
-	        if (!mapBalance.containsKey(key)) {
-	        	mapBalance.put(key, BigDecimal.ZERO);
+	        desc += fleet.getTerminal();
+	        mapDetail.put("desc", desc);
+	        mapDetail.put("total", SISUtil.getBigDecimal(mapDetail.get("total")).add(amt));
+        	if (isBBM) {
+	        	mapDetail.put("bbm", SISUtil.getBigDecimal(mapDetail.get("bbm")).add(amt));
+	        	desc = String.valueOf(mapDetail.get("desc_bbm"));
+		        if (!SISUtil.cekIsNull(desc)) {
+		        	desc += ", ";
+		        }
+		        desc += fleet.getTerminal();
+		        mapDetail.put("desc_bbm", desc);
+	        } else {
+	        	mapDetail.put("tol", SISUtil.getBigDecimal(mapDetail.get("tol")).add(amt));
+	        	desc = String.valueOf(mapDetail.get("desc_tol"));
+		        if (!SISUtil.cekIsNull(desc)) {
+		        	desc += ", ";
+		        }
+		        desc += fleet.getTerminal();
+		        mapDetail.put("desc_tol", desc);
 	        }
-	        mapTotal.put(c_bankaccount_id, mapTotal.get(c_bankaccount_id).add(amt));
-	        mapEnd.put(key, mapEnd.get(key).add(amt));
-	        mapBalance.put(key, mapBalance.get(key).add(amt));
 	    }
         
         int count = 0;
-        for (FleetTransaction fleet: listFleet) {
-        	BigDecimal amt = fleet.getNominal().negate();
-	        String accountNo = fleet.getNoKartu();
-        	int c_bankaccount_id = u.getBankAccountID(accountNo);
-	        if (c_bankaccount_id <= 0) {
-	        	throw new Exception("Bank Account "+accountNo+" not found!");
-	        }
-	        String dates = SISUtil.getStringDate(fleet.getTimestamp());
-	        String key = accountNo + ";" + dates;
-	        
-	        BigDecimal endAmt = mapEnd.get(key);
-	        BigDecimal diffAmt = mapBalance.get(key);
-            BigDecimal beginAmt = endAmt.add(diffAmt);
+        List<String> colInvs = List.of(
+        	    "c_invoice_id",
+        	    "ad_client_id",
+        	    "ad_org_id",
+        	    "documentno",
+        	    "sis_status_docno",
+        	    "c_doctype_id",
+        	    "c_doctypetarget_id",
+        	    "dateinvoiced",
+        	    "dateacct",
+        	    "c_bpartner_id",
+        	    "c_bpartner_location_id",
+        	    "ad_user_id",
+        	    "m_pricelist_id",
+        	    "c_currency_id",
+        	    "salesrep_id",
+        	    "paymentrule",
+        	    "c_paymentterm_id",
+        	    "c_tax_id",
+        	    "totallines",
+        	    "grandtotal",
+        	    "docstatus",
+        	    "docaction",
+        	    "c_bankaccount_id",
+        	    "c_invoice_uu",
+        	    "ispaid",
+        	    "isindispute",
+        	    "isactive",
+        	    "created",
+        	    "updated",
+        	    "createdby",
+        	    "updatedby"
+        	);
+        List<String> colInvLines = List.of(
+        		"ad_client_id",
+        	    "ad_org_id",
+        	    "isactive",
+        	    "created",
+        	    "updated",
+        	    "createdby",
+        	    "updatedby",
+        	    "c_invoiceline_id",
+        	    "c_invoice_id",
+        	    "line",
+        	    "c_charge_id",
+        	    "description",
+        	    "qtyentered",
+        	    "qtyinvoiced",
+        	    "c_uom_id",
+        	    "priceentered",
+        	    "priceactual",
+        	    "c_tax_id",
+        	    "pricelist",
+        	    "taxamt",
+        	    "linenetamt",
+        	    "linetotalamt",
+        	    "c_invoiceline_uu"
+        	);
+        for (String key: mapFleet.keySet()) {
+        	String[] keys = key.split(del);
+        	int c_bankaccount_id = Integer.valueOf(keys[0]);
+        	String dates = keys[1];
+        	int c_costcenter_id = u.getIntFromObject("c_bankaccount", "c_bankaccount_id", "c_costcenter_id", c_bankaccount_id, true);
+        	String costcenterValue = u.getStringFromObject("c_costcenter", "c_costcenter_id", "value", c_costcenter_id, true);
+        	int c_bpartner_id = u.getIntFromObject("c_bpartner", "value", "c_bpartner_id", costcenterValue, true);
+        	int c_bpartner_location_id = u.getIntFromObject("c_bpartner_location", "c_bpartner_location_id", "c_bpartner_id", c_bpartner_id, true);
+        	Timestamp now = new Timestamp(new Date().getTime());
+        	//cek existing data
+        	String sql = 
+        			"select "
+        			+ "	i.documentno "
+        			+ "from c_invoice i "
+        			+ "where i.docstatus not in ('VO','RE','NA') "
+        			+ "and i.c_doctypetarget_id = "+dtID+" "
+        			+ "and i.c_bankaccount_id = "+c_bankaccount_id+" "
+        			+ "and i.dateinvoiced = "+dates+"::date "
+        			+ "and i.issotrx = 'N' "
+        			+ "and i.isactive = 'Y' "
+        			+ "fetch first 1 rows only "
+        	        ;
+        	String docExists = "";
+    		List<Map<String, Object>> resultList = source.queryForList(sql);
+    		if (!resultList.isEmpty()) {
+    			for (Map<String, Object> map: resultList) {
+    				docExists = (String)map.get("documentno");
+    				break;
+    			}
+    		}
+    		if (!SISUtil.cekIsNull(docExists)) {
+    			throw new Exception("Invoice "+docExists +" already create for this fleet ("+key+")!");
+    		}
+    		
+    		//generate invoice
+    		String docno = u.getRefNoTime();
+    		int c_invoice_id = u.getNextSysID("C_Invoice_ID");
+    		sql = "insert into c_invoice ( ";
+    		for (int i = 0; i < colInvs.size(); i++) {
+    			if (i > 0) {
+    				sql += ",";
+    			}
+    			sql += colInvs.get(i);
+    		}
+    		sql += ") values (";
+    		for (int i = 0; i < colInvs.size(); i++) {
+    			if (i > 0) {
+    				sql += ",";
+    			}
+    			sql += "?";
+    		}
+			sql += ") ";
+            int rowsAffected = source.update(
+                    sql, 
+                    c_invoice_id, 
+                    sisApiProperties.getAd_client_id(), 
+                    sisApiProperties.getAd_org_id(), 
+                    docno,
+                    "R",
+                    dtID,
+                    dtID,
+                    SISUtil.getDate(dates),
+                    SISUtil.getDate(dates),
+                    c_bpartner_id,
+                    c_bpartner_location_id,
+                    userID,
+                    pricelistID,
+                    currencyID,
+                    userID,
+                    "P",
+                    paymentTermID,
+                    taxID,
+                    mapFleet.get("total"),
+                    mapFleet.get("total"),
+                    "DR",
+                    "CO",
+                    c_bankaccount_id,
+                    UUID.randomUUID(),
+                    "N",
+                    "N",
+                    "Y",
+                    now,
+                    now,
+                    userID,
+                    userID
+                );
             
-            String docno = u.getRefNoTime();
-            count += 1;
-            Timestamp ts = fleet.getTimestamp();
-            String desc = SISUtil.getStringDateTime(ts)+" "+fleet.getTerminal();
-            Timestamp now = u.getCurrentTime();
-        	int c_doctype_id = u.getIntSysconfig(SISConstants.SIS_DEFAULT_DOC_TYPE_FLEET_ID, true);
-        	int c_charge_id = u.getIntSysconfig(SISConstants.SIS_FLEET_CHARGE_ID, true);
-        	Object oCh = u.getObject("c_doctype", "c_doctype_id", "sis_fleetcharge_id", c_doctype_id);
-        	if (oCh != null) {
-        		c_charge_id = (int)oCh;
-        	}
-        	ts = SISUtil.removeTime(ts);
-        	u.generateBS(
-        			listBSID, 
-        			ts, 
-        			c_bankaccount_id, 
-        			diffAmt, 
-        			docno, 
-        			desc, 
-        			beginAmt, 
-        			endAmt, 
-        			now, 
-        			amt, 
-        			count,
-        			c_doctype_id,
-        			c_charge_id,
-        			true
-			);
+            int line = 0;
+            if (mapFleet.containsKey("bbm")) {
+            	line += 10;
+				generateInvLineFleet(colInvLines, mapFleet, now, "bbm", userID, c_invoice_id, line, chargeBBMID, taxID);
+            }
+            if (mapFleet.containsKey("tol")) {
+            	line += 10;
+				generateInvLineFleet(colInvLines, mapFleet, now, "tol", userID, c_invoice_id, line, chargeTolID, taxID);
+            }
+    		
+    		count +=1;
         }
-        
         
         return listBSID;
     }
+	
+	int generateInvLineFleet(
+			List<String> colInvLines,
+			LinkedHashMap<String, LinkedHashMap<String, Object>> mapFleet,
+			Timestamp now,
+			String type,
+			int userID,
+			int c_invoice_id,
+			int line,
+			int chargeID,
+			int taxID
+			) {
+		int c_invoiceline_id = u.getNextSysID("C_InvoiceLine_ID");
+		sql = "insert into c_invoiceline ( ";
+		for (int i = 0; i < colInvLines.size(); i++) {
+			if (i > 0) {
+				sql += ",";
+			}
+			sql += colInvLines.get(i);
+		}
+		sql += ") values (";
+		for (int i = 0; i < colInvLines.size(); i++) {
+			if (i > 0) {
+				sql += ",";
+			}
+			sql += "?";
+		}
+		sql += ") ";
+        int rowsAffected = source.update(
+                sql, 
+                sisApiProperties.getAd_client_id(), 
+                sisApiProperties.getAd_org_id(), 
+                "Y",
+                now,
+                now,
+                userID,
+                userID,
+                c_invoiceline_id,
+                c_invoice_id, 
+                line,
+                chargeID,
+                mapFleet.get("desc_"+type),
+                BigDecimal.ONE,
+                BigDecimal.ONE,
+                100,
+                mapFleet.get(type),
+                mapFleet.get(type),
+                taxID,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                mapFleet.get(type),
+                mapFleet.get(type),
+                UUID.randomUUID()
+        );
+        return c_invoiceline_id;
+	}
 	
 }
