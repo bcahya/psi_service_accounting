@@ -287,7 +287,7 @@ public class SISGlobalExecute {
 	        Set<Integer> uniqueSet = new HashSet<>(listID);
 	        listBSID = new ArrayList<>(uniqueSet);
 	        Map<String, Object> map = new LinkedHashMap<String, Object>();
-	        map.put("list_bankstatement_id", listBSID);
+	        map.put("list_data_id", listBSID);
 	        map.put("list_error", listErr);
 	        resultList.add(map);
 			response = SISResponse.successResponse(resultList);
@@ -307,8 +307,7 @@ public class SISGlobalExecute {
     	int pricelistID = u.getIntSysconfig(SISConstants.SIS_FLEET_PRICE_LIST_ID, true);
     	int taxID = u.getIntSysconfig(SISConstants.SIS_FLEET_TAX_ID, true);
     	int paymentTermID = u.getIntSysconfig(SISConstants.SIS_FLEET_PAYMENT_TERM_ID, true);
-    	int dtID = u.getIntSysconfig(SISConstants.SIS_FLEET_DOC_TYPE_DOC_ACTION, true);
-    	int docAction = u.getIntSysconfig(SISConstants.SIS_FLEET_DOC_TYPE_DOC_ACTION, true);
+    	int dtID = u.getIntSysconfig(SISConstants.SIS_FLEET_DEFAULT_DOC_TYPE_ID, true);
     	int currencyID = u.getIntSysconfig(SISConstants.SIS_FLEET_CURRENCY_ID, true);
     	int userID = u.getIntSysconfig(SISConstants.SIS_FLEET_USER_ID, true);
     	
@@ -403,7 +402,9 @@ public class SISGlobalExecute {
         	    "created",
         	    "updated",
         	    "createdby",
-        	    "updatedby"
+        	    "updatedby",
+        	    "issotrx",
+        	    "c_costcenter_id"
         	);
         List<String> colInvLines = List.of(
         		"ad_client_id",
@@ -428,16 +429,18 @@ public class SISGlobalExecute {
         	    "taxamt",
         	    "linenetamt",
         	    "linetotalamt",
-        	    "c_invoiceline_uu"
+        	    "c_invoiceline_uu",
+        	    "c_costcenter_id"
         	);
         for (String key: mapFleet.keySet()) {
+        	LinkedHashMap<String, Object> mapDetail = mapFleet.get(key);
         	String[] keys = key.split(del);
         	int c_bankaccount_id = Integer.valueOf(keys[0]);
         	String dates = keys[1];
         	int c_costcenter_id = u.getIntFromObject("c_bankaccount", "c_bankaccount_id", "c_costcenter_id", c_bankaccount_id, true);
         	String costcenterValue = u.getStringFromObject("c_costcenter", "c_costcenter_id", "value", c_costcenter_id, true);
         	int c_bpartner_id = u.getIntFromObject("c_bpartner", "value", "c_bpartner_id", costcenterValue, true);
-        	int c_bpartner_location_id = u.getIntFromObject("c_bpartner_location", "c_bpartner_location_id", "c_bpartner_id", c_bpartner_id, true);
+        	int c_bpartner_location_id = u.getIntFromObject("c_bpartner_location", "c_bpartner_id", "c_bpartner_location_id", c_bpartner_id, true);
         	Timestamp now = new Timestamp(new Date().getTime());
         	//cek existing data
         	String sql = 
@@ -447,7 +450,7 @@ public class SISGlobalExecute {
         			+ "where i.docstatus not in ('VO','RE','NA') "
         			+ "and i.c_doctypetarget_id = "+dtID+" "
         			+ "and i.c_bankaccount_id = "+c_bankaccount_id+" "
-        			+ "and i.dateinvoiced = "+dates+"::date "
+        			+ "and i.dateinvoiced = '"+dates+"'::date "
         			+ "and i.issotrx = 'N' "
         			+ "and i.isactive = 'Y' "
         			+ "fetch first 1 rows only "
@@ -466,7 +469,7 @@ public class SISGlobalExecute {
     		
     		//generate invoice
     		String docno = u.getRefNoTime();
-    		int c_invoice_id = u.getNextSysID("C_Invoice_ID");
+    		int c_invoice_id = u.getNextSysID("C_Invoice");
     		sql = "insert into c_invoice ( ";
     		for (int i = 0; i < colInvs.size(); i++) {
     			if (i > 0) {
@@ -502,8 +505,8 @@ public class SISGlobalExecute {
                     "P",
                     paymentTermID,
                     taxID,
-                    mapFleet.get("total"),
-                    mapFleet.get("total"),
+                    mapDetail.get("total"),
+                    mapDetail.get("total"),
                     "DR",
                     "CO",
                     c_bankaccount_id,
@@ -514,19 +517,24 @@ public class SISGlobalExecute {
                     now,
                     now,
                     userID,
-                    userID
+                    userID,
+                    "N",
+                    c_costcenter_id
                 );
             
             int line = 0;
-            if (mapFleet.containsKey("bbm")) {
-            	line += 10;
-				generateInvLineFleet(colInvLines, mapFleet, now, "bbm", userID, c_invoice_id, line, chargeBBMID, taxID);
-            }
-            if (mapFleet.containsKey("tol")) {
-            	line += 10;
-				generateInvLineFleet(colInvLines, mapFleet, now, "tol", userID, c_invoice_id, line, chargeTolID, taxID);
-            }
-    		
+			if (mapDetail.containsKey("bbm") && SISUtil.getBigDecimal(mapDetail.get("bbm")).signum() > 0) {
+				line += 10;
+				generateInvLineFleet(colInvLines, mapDetail, now, "bbm", userID, c_invoice_id, line, chargeBBMID,
+						taxID, c_costcenter_id);
+			}
+			if (mapDetail.containsKey("tol") && SISUtil.getBigDecimal(mapDetail.get("tol")).signum() > 0) {
+				line += 10;
+				generateInvLineFleet(colInvLines, mapDetail, now, "tol", userID, c_invoice_id, line, chargeTolID,
+						taxID, c_costcenter_id);
+			}
+
+			listBSID.add(c_invoice_id);
     		count +=1;
         }
         
@@ -535,16 +543,17 @@ public class SISGlobalExecute {
 	
 	int generateInvLineFleet(
 			List<String> colInvLines,
-			LinkedHashMap<String, LinkedHashMap<String, Object>> mapFleet,
+			LinkedHashMap<String, Object> mapDetail,
 			Timestamp now,
 			String type,
 			int userID,
 			int c_invoice_id,
 			int line,
 			int chargeID,
-			int taxID
+			int taxID,
+			int c_costcenter_id
 			) {
-		int c_invoiceline_id = u.getNextSysID("C_InvoiceLine_ID");
+		int c_invoiceline_id = u.getNextSysID("C_InvoiceLine");
 		sql = "insert into c_invoiceline ( ";
 		for (int i = 0; i < colInvLines.size(); i++) {
 			if (i > 0) {
@@ -573,18 +582,19 @@ public class SISGlobalExecute {
                 c_invoice_id, 
                 line,
                 chargeID,
-                mapFleet.get("desc_"+type),
+                mapDetail.get("desc_"+type),
                 BigDecimal.ONE,
                 BigDecimal.ONE,
                 100,
-                mapFleet.get(type),
-                mapFleet.get(type),
+                mapDetail.get(type),
+                mapDetail.get(type),
                 taxID,
+                mapDetail.get(type),
                 BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                mapFleet.get(type),
-                mapFleet.get(type),
-                UUID.randomUUID()
+                mapDetail.get(type),
+                mapDetail.get(type),
+                UUID.randomUUID(),
+                c_costcenter_id
         );
         return c_invoiceline_id;
 	}
