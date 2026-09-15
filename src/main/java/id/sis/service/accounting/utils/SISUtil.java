@@ -268,7 +268,8 @@ public class SISUtil {
 	        "FROM "+tableName+" "+ 
 	        "WHERE ad_client_id = "+sisApiProperties.getAd_client_id()+" " + 
 	        "AND "+colParam+" = "+cols+" " +
-	        "and isactive = 'Y' "
+	        "and isactive = 'Y' " +
+	        "fetch first 1 rows only "
 	        ;
 		List<Map<String, Object>> resultList = source.queryForList(sql);
 		if (!resultList.isEmpty()) {
@@ -278,6 +279,40 @@ public class SISUtil {
 			}
 		}
 		return id;
+	}
+	
+	public int getIntFromObject(
+			String tableName,
+			String colParam,
+			String colName,
+			Object value,
+			boolean isThrowError
+			) throws Exception {
+		Object o = getObject(tableName, colParam, colName+"::int", value);
+		if (o == null && isThrowError) {
+			throw new Exception(tableName +" ("+colParam+ ": " + String.valueOf(value) +") not found!");
+		}
+		if (o != null) {
+			return (int)o;
+		}
+		return 0;
+	}
+	
+	public String getStringFromObject(
+			String tableName,
+			String colParam,
+			String colName,
+			Object value,
+			boolean isThrowError
+			) throws Exception {
+		Object o = getObject(tableName, colParam, colName, value);
+		if (o == null && isThrowError) {
+			throw new Exception(tableName +" - "+ colName+" not found!");
+		}
+		if (o != null) {
+			return (String)o;
+		}
+		return "";
 	}
 	
 	@FunctionalInterface
