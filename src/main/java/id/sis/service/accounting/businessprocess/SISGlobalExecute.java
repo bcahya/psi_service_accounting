@@ -468,7 +468,7 @@ public class SISGlobalExecute {
     		}
     		
     		//generate invoice
-    		String docno = SISUtil.getStringDate(u.getCurrentTime())+SISUtil.addZero(count, 4);
+    		String docno = u.getRefNoTime()+SISUtil.addZero(count, 4);
     		int c_invoice_id = u.getNextSysID("C_Invoice");
     		sql = "insert into c_invoice ( ";
     		for (int i = 0; i < colInvs.size(); i++) {
