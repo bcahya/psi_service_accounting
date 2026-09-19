@@ -25,7 +25,7 @@ public class SISServiceImpl{
     @Autowired
     SISApi sis;
 
-    @Scheduled(cron = "0 */10 * * * *")
+//    @Scheduled(cron = "0 */10 * * * *")
 	public SISResponse processMT940() throws Exception {
         logger.info("execute processMT940");
         SISResponse response = ex.processMT940();
@@ -38,6 +38,14 @@ public class SISServiceImpl{
         logger.info("execute processFleetReport");
         SISResponse response = ex.processFleetReport();
         System.out.println("processFleetReport - listdata: "+response.getListdata().toString());
+        return response;
+    }
+    
+    @Scheduled(cron = "0 */10 * * * *")
+	public SISResponse processMT940Temp() throws Exception {
+        logger.info("execute processMT940Temp");
+        SISResponse response = ex.processMT940Temp();
+        System.out.println("processMT940Temp - listdata: "+response.getListdata().toString());
         return response;
     }
 
