@@ -9,6 +9,7 @@ import lombok.Data;
 @Configuration("SISApiProperties")
 @Data
 public class SISApiProperties {
+	String directory_fleet;
     String directory;
     Integer ad_client_id;
     Integer ad_org_id;
@@ -17,6 +18,14 @@ public class SISApiProperties {
     Integer c_charge_id;
     Integer c_doctype_id;
     String dir_cimb;
+
+	public String getDirectory_fleet() {
+		return directory_fleet;
+	}
+
+	public void setDirectory_fleet(String directory_fleet) {
+		this.directory_fleet = directory_fleet;
+	}
 
 	public String getDir_cimb() {
 		return dir_cimb;

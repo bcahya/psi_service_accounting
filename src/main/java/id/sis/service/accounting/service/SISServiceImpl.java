@@ -28,7 +28,17 @@ public class SISServiceImpl{
     @Scheduled(cron = "0 */10 * * * *")
 	public SISResponse processMT940() throws Exception {
         logger.info("execute processMT940");
-        return ex.processMT940();
+        SISResponse response = ex.processMT940();
+        System.out.println("processMT940 - listdata: "+response.getListdata().toString());
+        return response;
+    }
+    
+    @Scheduled(cron = "0 */10 * * * *")
+	public SISResponse processFleetReport() throws Exception {
+        logger.info("execute processFleetReport");
+        SISResponse response = ex.processFleetReport();
+        System.out.println("processFleetReport - listdata: "+response.getListdata().toString());
+        return response;
     }
 
 //    @Scheduled(cron = "0 */10 * * * *")
