@@ -70,4 +70,20 @@ public class SISController {
 		return response;
 	}
 	
+	@ResponseBody
+	@RequestMapping(value = "/processFleetBT", method = RequestMethod.POST)
+	SISResponse processFleetBT(
+//			@RequestParam("m_inventory_id") Integer m_inventory_id
+			) {
+		SISResponse response = new SISResponse();
+
+		try {
+			response = sisService.processFleetBT();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		return response;
+	}
+	
 }
