@@ -573,7 +573,7 @@ public class SISGlobalExecute {
 		int baFromID = u.getIntSysconfig(SISConstants.SIS_FLEET_BT_BANKACCOUNT_ID, true);
     	int currencyID = u.getIntSysconfig(SISConstants.SIS_FLEET_CURRENCY_ID, true);
     	int userID = u.getIntSysconfig(SISConstants.SIS_FLEET_USER_ID, true);
-    	int orgFromID = u.getIntFromObject("c_banktransfer", "c_banktransfer_id", "ad_org_id", baFromID, true);	
+    	int orgFromID = u.getIntFromObject("c_bankaccount", "c_bankaccount_id", "ad_org_id", baFromID, true);	
     	
     	Timestamp now = u.getCurrentTime();
     	List<String> colBTs = List.of(
@@ -588,6 +588,7 @@ public class SISGlobalExecute {
         	    "c_doctype_id",
         	    "documentno",
         	    "description",
+        	    "t_datetime",
         	    "paydate",
         	    "dateacct",
         	    "from_c_bankaccount_id",
@@ -600,7 +601,8 @@ public class SISGlobalExecute {
         	    "to_amt",
         	    "docstatus",
         	    "docaction",
-        	    "processed"
+        	    "processed",
+        	    "rate"
         	);
     	
 		List<FleetTransaction> listFleet = SIS_FleetReportParser.parse(Path.of(filePath));
@@ -619,10 +621,35 @@ public class SISGlobalExecute {
         	} else {
         		c_bankaccount_id = mapBA.get(accountNo);
         	}
-        	int ad_org_id = u.getIntFromObject("c_banktransfer", "c_banktransfer_id", "ad_org_id", c_bankaccount_id, true);	
+        	int ad_org_id = u.getIntFromObject("c_bankaccount", "c_bankaccount_id", "ad_org_id", c_bankaccount_id, true);	
         	BigDecimal amt = fleet.getNominal();
 	        String dates = SISUtil.getStringDate(fleet.getTimestamp());
+	        String datetimes = SISUtil.getStringDashFromTimeStampTime(fleet.getTimestamp());
 	        String desc = fleet.getTerminal();
+	        
+	        //cek existing data
+        	String sql = 
+        			"select "
+        			+ "	i.documentno "
+        			+ "from c_banktransfer i "
+        			+ "where i.docstatus not in ('VO','RE','NA') "
+        			+ "and i.c_doctype_id = "+dtID+" "
+        			+ "and i.to_c_bankaccount_id = "+c_bankaccount_id+" "
+        			+ "and i.t_datetime = '"+datetimes+"'::timestamp "
+        			+ "and i.isactive = 'Y' "
+        			+ "fetch first 1 rows only "
+        	        ;
+        	String docExists = "";
+    		List<Map<String, Object>> resultList = source.queryForList(sql);
+    		if (!resultList.isEmpty()) {
+    			for (Map<String, Object> map: resultList) {
+    				docExists = (String)map.get("documentno");
+    				break;
+    			}
+    		}
+    		if (!SISUtil.cekIsNull(docExists)) {
+    			throw new Exception("Bank Transfer already create on document "+docExists+"!");
+    		}
 	        
 	        //generate BT
     		String docno = u.getRefNoTime()+SISUtil.addZero(count, 4);
@@ -655,7 +682,7 @@ public class SISGlobalExecute {
                     dtID,
                     docno,
                     desc,
-                    userID,
+                    fleet.getTimestamp(),
                     SISUtil.getDate(dates),
                     SISUtil.getDate(dates),
                     baFromID,
@@ -668,7 +695,8 @@ public class SISGlobalExecute {
                     amt.abs(),
                     "DR",
                     "CO",
-                    "N"
+                    "N",
+                    0
                 );
             listBSID.add(c_banktransfer_id);
         	count +=1;
