@@ -382,7 +382,7 @@ public class SISGlobalExecute {
 	        			+ "and m.accountno = '"+accountNo+"' "
 	        			+ "and to_char(m.datedoc,'YYMMDD') = '"+transactionDate+"' "
 	        			+ "and m.amt = "+amt+" "
-	        			+ "and m.description = "+desc+" "
+	        			+ "and m.description = '"+desc+"' "
 	        			+ "fetch first 1 rows only "
 	        	        ;
 	        	String docExists = "";
