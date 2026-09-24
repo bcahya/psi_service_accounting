@@ -40,6 +40,14 @@ public class SISServiceImpl{
         System.out.println("processFleetReport - listdata: "+response.getListdata().toString());
         return response;
     }
+
+    @Scheduled(cron = "0 */10 * * * *")
+    public SISResponse processFleetBT() throws Exception {
+        logger.info("execute processFleetBT");
+        SISResponse response = ex.processFleetBT();
+        System.out.println("processFleetBT - listdata: "+response.getListdata().toString());
+        return response;
+    }
     
     @Scheduled(cron = "0 */10 * * * *")
 	public SISResponse processMT940Temp() throws Exception {

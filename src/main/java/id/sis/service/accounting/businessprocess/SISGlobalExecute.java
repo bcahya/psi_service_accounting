@@ -491,6 +491,7 @@ public class SISGlobalExecute {
 	        	if (c_bankaccount_id <= 0) {
 		        	throw new Exception("Bank Account "+accountNo+" not found!");
 		        }
+	        	mapBA.put(accountNo, c_bankaccount_id);
         	} else {
         		c_bankaccount_id = mapBA.get(accountNo);
         	}
@@ -703,6 +704,171 @@ public class SISGlobalExecute {
 			listBSID.add(c_invoice_id);
     		count +=1;
         }
+        
+        return listBSID;
+    }
+	
+	public SISResponse processFleetBT() throws Exception {
+		u = new SISUtil(source, sisApiProperties, transactionManager);
+		logger.info("[SIS] processFleetBT");
+		SISResponse response = new SISResponse();
+		List<Map<String, Object>> resultList = new ArrayList<>();
+		try {
+			List<Integer> listBSID = new ArrayList<>();
+	        List<String> listErr = new ArrayList<>();
+	        List<Integer> listID = u.execDir(listErr, sisApiProperties.getDirectory_fleetbt(), dirs -> {
+	        	return readFleetBT(dirs);
+			});
+	        Set<Integer> uniqueSet = new HashSet<>(listID);
+	        listBSID = new ArrayList<>(uniqueSet);
+	        Map<String, Object> map = new LinkedHashMap<String, Object>();
+	        map.put("list_data_id", listBSID);
+	        map.put("list_error", listErr);
+	        resultList.add(map);
+			response = SISResponse.successResponse(resultList);
+			logger.info(listErr.toString());
+		} catch (Exception e) {
+			response = SISResponse.errorResponse(e.getMessage());
+		}
+		return response;
+	}
+	
+	List<Integer> readFleetBT(
+			String filePath
+			) throws Exception{
+		u = new SISUtil(source, sisApiProperties, transactionManager);
+		int dtID = u.getIntSysconfig(SISConstants.SIS_FLEET_BT_DOCTYPE_ID, true);
+		int baFromID = u.getIntSysconfig(SISConstants.SIS_FLEET_BT_BANKACCOUNT_ID, true);
+    	int currencyID = u.getIntSysconfig(SISConstants.SIS_FLEET_CURRENCY_ID, true);
+    	int userID = u.getIntSysconfig(SISConstants.SIS_FLEET_USER_ID, true);
+    	int orgFromID = u.getIntFromObject("c_bankaccount", "c_bankaccount_id", "ad_org_id", baFromID, true);	
+    	
+    	Timestamp now = u.getCurrentTime();
+    	List<String> colBTs = List.of(
+        		"ad_client_id",
+        	    "ad_org_id",
+        	    "isactive",
+        	    "created",
+        	    "updated",
+        	    "createdby",
+        	    "updatedby",
+        	    "c_banktransfer_id",
+        	    "c_doctype_id",
+        	    "documentno",
+        	    "description",
+        	    "t_datetime",
+        	    "paydate",
+        	    "dateacct",
+        	    "from_c_bankaccount_id",
+        	    "from_ad_org_id",
+        	    "from_c_currency_id",
+        	    "from_amt",
+        	    "to_c_bankaccount_id",
+        	    "to_ad_org_id",
+        	    "to_c_currency_id",
+        	    "to_amt",
+        	    "docstatus",
+        	    "docaction",
+        	    "processed",
+        	    "rate"
+        	);
+    	
+		List<FleetTransaction> listFleet = SIS_FleetReportParser.parse(Path.of(filePath));
+		
+		LinkedHashMap<String, Integer> mapBA = new LinkedHashMap<>();
+		List<Integer> listBSID = new ArrayList<Integer>();
+		int count = 0;
+        for (FleetTransaction fleet: listFleet) {
+        	String accountNo = fleet.getNoKartu();
+        	int c_bankaccount_id = 0;
+        	if (!mapBA.containsKey(accountNo)) {
+	        	c_bankaccount_id = u.getBankAccountID(accountNo);
+	        	if (c_bankaccount_id <= 0) {
+		        	throw new Exception("Bank Account "+accountNo+" not found!");
+		        }
+        	} else {
+        		c_bankaccount_id = mapBA.get(accountNo);
+        	}
+        	int ad_org_id = u.getIntFromObject("c_bankaccount", "c_bankaccount_id", "ad_org_id", c_bankaccount_id, true);	
+        	BigDecimal amt = fleet.getNominal();
+	        String dates = SISUtil.getStringDate(fleet.getTimestamp());
+	        String datetimes = SISUtil.getStringDashFromTimeStampTime(fleet.getTimestamp());
+	        String desc = fleet.getTerminal();
+	        
+	        //cek existing data
+        	String sql = 
+        			"select "
+        			+ "	i.documentno "
+        			+ "from c_banktransfer i "
+        			+ "where i.docstatus not in ('VO','RE','NA') "
+        			+ "and i.c_doctype_id = "+dtID+" "
+        			+ "and i.to_c_bankaccount_id = "+c_bankaccount_id+" "
+        			+ "and i.t_datetime = '"+datetimes+"'::timestamp "
+        			+ "and i.isactive = 'Y' "
+        			+ "fetch first 1 rows only "
+        	        ;
+        	String docExists = "";
+    		List<Map<String, Object>> resultList = source.queryForList(sql);
+    		if (!resultList.isEmpty()) {
+    			for (Map<String, Object> map: resultList) {
+    				docExists = (String)map.get("documentno");
+    				break;
+    			}
+    		}
+    		if (!SISUtil.cekIsNull(docExists)) {
+    			throw new Exception("Bank Transfer already create on document "+docExists+"!");
+    		}
+	        
+	        //generate BT
+    		String docno = u.getRefNoTime()+SISUtil.addZero(count, 4);
+    		int c_banktransfer_id = u.getNextSysID("C_BankTransfer");
+    		sql = "insert into c_banktransfer ( ";
+    		for (int i = 0; i < colBTs.size(); i++) {
+    			if (i > 0) {
+    				sql += ",";
+    			}
+    			sql += colBTs.get(i);
+    		}
+    		sql += ") values (";
+    		for (int i = 0; i < colBTs.size(); i++) {
+    			if (i > 0) {
+    				sql += ",";
+    			}
+    			sql += "?";
+    		}
+			sql += ") ";
+            int rowsAffected = source.update(
+                    sql, 
+                    sisApiProperties.getAd_client_id(), 
+                    ad_org_id, 
+                    "Y",
+                    now,
+                    now,
+                    userID,
+                    userID,
+                    c_banktransfer_id,
+                    dtID,
+                    docno,
+                    desc,
+                    fleet.getTimestamp(),
+                    SISUtil.getDate(dates),
+                    SISUtil.getDate(dates),
+                    baFromID,
+                    orgFromID,
+                    currencyID,
+                    amt.abs(),
+                    c_bankaccount_id,
+                    ad_org_id,
+                    currencyID,
+                    amt.abs(),
+                    "DR",
+                    "CO",
+                    "N",
+                    0
+                );
+            listBSID.add(c_banktransfer_id);
+        	count +=1;
+	    }
         
         return listBSID;
     }
