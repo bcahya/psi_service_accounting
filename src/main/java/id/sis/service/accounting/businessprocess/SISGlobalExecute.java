@@ -313,6 +313,7 @@ public class SISGlobalExecute {
 		List<FleetTransaction> listFleet = SIS_FleetReportParser.parse(Path.of(filePath));
 		
 		LinkedHashMap<String, Integer> mapBA = new LinkedHashMap<>();
+		LinkedHashMap<Integer, Integer> mapDT = new LinkedHashMap<>();
 		LinkedHashMap<String, LinkedHashMap<String, Object>> mapFleet = new LinkedHashMap<>();
 		List<Integer> listBSID = new ArrayList<Integer>();
 		String del = ";";
@@ -324,8 +325,20 @@ public class SISGlobalExecute {
 	        	if (c_bankaccount_id <= 0) {
 		        	throw new Exception("Bank Account "+accountNo+" not found!");
 		        }
+	        	mapBA.put(accountNo, c_bankaccount_id);
         	} else {
         		c_bankaccount_id = mapBA.get(accountNo);
+        	}
+        	
+        	int dtBAID = 0;
+        	if (!mapDT.containsKey(c_bankaccount_id)) {
+        		dtBAID = u.getIntFromObject("c_bankaccount", "c_bankaccount_id", "sis_doctypebs_id", c_bankaccount_id, false);
+        		mapDT.put(c_bankaccount_id, dtBAID);
+        	} else {
+        		dtBAID = mapDT.get(c_bankaccount_id);
+        	}
+        	if (dtBAID > 0) {
+        		c_bankaccount_id = dtBAID; 
         	}
         		
         	BigDecimal amt = fleet.getNominal();
