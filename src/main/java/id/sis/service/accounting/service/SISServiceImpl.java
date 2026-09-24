@@ -42,7 +42,7 @@ public class SISServiceImpl{
     }
 
     @Scheduled(cron = "0 */10 * * * *")
-	public SISResponse processFleetBT() throws Exception {
+    public SISResponse processFleetBT() throws Exception {
         logger.info("execute processFleetBT");
         SISResponse response = ex.processFleetBT();
         System.out.println("processFleetBT - listdata: "+response.getListdata().toString());
