@@ -237,6 +237,20 @@ public class SISUtil {
 		return result;
 	}
 	
+	public static Timestamp getTimeDashFromStringTimestamp(String date) {
+		if (date == null) {
+			return null;
+		}
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		Timestamp result = null;
+		try {
+			result = new Timestamp(sdf.parse(date).getTime());
+		} catch (ParseException e) {
+			e.printStackTrace();
+		}
+		return result;
+	}
+	
 	public String getRefNoTime() {
 		Timestamp date = getCurrentTime();
 		if (date == null) {

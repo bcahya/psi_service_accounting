@@ -18,4 +18,6 @@ public class SISConstants {
 	public static String SIS_FLEET_DOC_TYPE_DOC_ACTION = "SIS_FLEET_DOC_TYPE_DOC_ACTION";
 	public static String SIS_FLEET_CURRENCY_ID = "SIS_FLEET_CURRENCY_ID";
 	public static String SIS_FLEET_USER_ID = "SIS_FLEET_USER_ID";
+	public static String SIS_FLEET_BT_DOCTYPE_ID = "SIS_FLEET_BT_DOCTYPE_ID";
+	public static String SIS_FLEET_BT_BANKACCOUNT_ID = "SIS_FLEET_BT_BANKACCOUNT_ID";
 }
