@@ -368,7 +368,7 @@ public class SISGlobalExecute {
 	            
 	            String desc = listDesc.get(count-1).replace("'", "''");
 	            Timestamp ts = SISUtil.getDateyyMMdd(transactionDate);
-	        	BigDecimal amt = SISUtil.getBigDecimal(transactionAmount);
+	        	BigDecimal amt = SISUtil.getBigDecimal(transactionAmount).movePointLeft(2).setScale(2);
 	        	if (debitCreditMark.equalsIgnoreCase("D")) {
 	        		amt = amt.negate();
 	        	}
