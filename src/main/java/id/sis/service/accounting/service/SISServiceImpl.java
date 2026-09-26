@@ -49,7 +49,7 @@ public class SISServiceImpl{
         return response;
     }
     
-//    @Scheduled(cron = "0 */10 * * * *")
+    @Scheduled(cron = "0 */10 * * * *")
 	public SISResponse processMT940Temp() throws Exception {
         logger.info("execute processMT940Temp");
         SISResponse response = ex.processMT940Temp();
