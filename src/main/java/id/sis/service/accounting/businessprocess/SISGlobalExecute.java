@@ -272,6 +272,173 @@ public class SISGlobalExecute {
         return listBSID;
     }
 	
+	public SISResponse processMT940Temp() throws Exception {
+		u = new SISUtil(source, sisApiProperties, transactionManager);
+		logger.info("[SIS] processMT940Temp");
+		SISResponse response = new SISResponse();
+		List<Map<String, Object>> resultList = new ArrayList<>();
+		try {
+			List<Integer> listBSID = new ArrayList<>();
+	        List<String> listErr = new ArrayList<>();
+	        List<Integer> listID = u.execDir(listErr, sisApiProperties.getDirectory(), dirs -> {
+	        	return readMT940Temp(dirs);
+			});
+	        Set<Integer> uniqueSet = new HashSet<>(listID);
+	        listBSID = new ArrayList<>(uniqueSet);
+	        Map<String, Object> map = new LinkedHashMap<String, Object>();
+	        map.put("list_bankstatement_id", listBSID);
+	        map.put("list_error", listErr);
+	        resultList.add(map);
+			response = SISResponse.successResponse(resultList);
+			logger.info(listErr.toString());
+		} catch (Exception e) {
+			response = SISResponse.errorResponse(e.getMessage());
+		}
+		return response;
+	}
+	
+	List<Integer> readMT940Temp(
+			String filePath
+			) throws Exception{
+		u = new SISUtil(source, sisApiProperties, transactionManager);
+		
+		List<String> colTemp = List.of(
+        		"ad_client_id",
+        	    "ad_org_id",
+        	    "isactive",
+        	    "created",
+        	    "updated",
+        	    "createdby",
+        	    "updatedby",
+        	    "sis_mt940_id",
+        	    "sis_mt940_uu",
+        	    "value",
+        	    "name",
+        	    "accountno",
+        	    "amt",
+        	    "datedoc",
+        	    "description"
+        	);
+		int userID = u.getIntSysconfig(SISConstants.SIS_FLEET_USER_ID, true);
+    	Timestamp now = u.getCurrentTime();
+		String mt940Text = "";
+		try {
+			mt940Text = Files.readString(Paths.get(filePath));
+		} catch (Exception e) {
+			mt940Text = Files.readString(
+				    Paths.get(filePath),
+				    StandardCharsets.ISO_8859_1
+				);
+		}
+		
+		String[] rawMessages = mt940Text.split("-\\}");
+
+        List<MT940> listMT940 = new ArrayList<>();
+
+        for (String raw : rawMessages) {
+
+            if (raw.trim().isEmpty()) continue;
+
+            String msgText = raw + "-}";
+
+            SwiftParser parser = new SwiftParser(msgText);
+            SwiftMessage msg = parser.message();
+
+            if (msg != null && "940".equals(msg.getType())) {
+            	listMT940.add(new MT940(msg));
+            }
+        }
+        
+        List<Integer> listBSID = new ArrayList<Integer>();
+        for (MT940 mt940: listMT940) {
+        	String accountNo = mt940.getField25().getAccount();
+	        List<String> listDesc = new ArrayList<>();
+	        for (Field86 f86: mt940.getField86()) {
+	       	 listDesc.add(f86.getValue());
+	        }
+	        
+	        int count = 0;
+	        List<Field61> listTrans = mt940.getField61();
+	        System.out.println(listTrans.size());
+	        for (Field61 transaction : listTrans) {
+	    		count += 1;
+	            String transactionDate = transaction.getDate();
+	            String transactionAmount = transaction.getAmount().replace(",", "");
+	            String debitCreditMark = transaction.getDebitCreditMark();
+	            
+	            String desc = listDesc.get(count-1).replace("'", "''");
+	            Timestamp ts = SISUtil.getDateyyMMdd(transactionDate);
+	        	BigDecimal amt = SISUtil.getBigDecimal(transactionAmount).movePointLeft(2).setScale(2);
+	        	if (debitCreditMark.equalsIgnoreCase("D")) {
+	        		amt = amt.negate();
+	        	}
+	        	
+	        	//cek existing data
+	        	String sql = 
+	        			"select "
+	        			+ "	value "
+	        			+ "from sis_mt940 m "
+	        			+ "where m.ad_client_id = "+sisApiProperties.getAd_client_id()+" "
+	        			+ "and m.accountno = '"+accountNo+"' "
+	        			+ "and to_char(m.datedoc,'YYMMDD') = '"+transactionDate+"' "
+	        			+ "and m.amt = "+amt+" "
+	        			+ "and m.description = '"+desc+"' "
+	        			+ "fetch first 1 rows only "
+	        	        ;
+	        	String docExists = "";
+	    		List<Map<String, Object>> resultList = source.queryForList(sql);
+	    		if (!resultList.isEmpty()) {
+	    			for (Map<String, Object> map: resultList) {
+	    				docExists = (String)map.get("value");
+	    				break;
+	    			}
+	    		}
+	    		if (!SISUtil.cekIsNull(docExists)) {
+	    			throw new Exception("Value "+docExists +" already create with same criteria!");
+	    		}
+	    		
+	    		//generate temp
+	    		String value = u.getRefNoTime()+SISUtil.addZero(count, 4);
+	    		int sis_mt940_id = u.getNextSysID("SIS_MT940");
+	    		sql = "insert into sis_mt940 ( ";
+	    		for (int i = 0; i < colTemp.size(); i++) {
+	    			if (i > 0) {
+	    				sql += ",";
+	    			}
+	    			sql += colTemp.get(i);
+	    		}
+	    		sql += ") values (";
+	    		for (int i = 0; i < colTemp.size(); i++) {
+	    			if (i > 0) {
+	    				sql += ",";
+	    			}
+	    			sql += "?";
+	    		}
+				sql += ") ";
+	            int rowsAffected = source.update(
+	                    sql, 
+	                    sisApiProperties.getAd_client_id(), 
+	                    sisApiProperties.getAd_org_id(), 
+	                    "Y",
+	                    now,
+	                    now,
+	                    userID,
+	                    userID,
+	                    sis_mt940_id,
+	                    UUID.randomUUID(),
+	                    value,
+	                    value,
+	                    accountNo,
+	                    amt,
+	                    ts,
+	                    desc
+	                );
+	            listBSID.add(sis_mt940_id);
+	        }
+        }
+        return listBSID;
+    }
+	
 	public SISResponse processFleetReport() throws Exception {
 		u = new SISUtil(source, sisApiProperties, transactionManager);
 		logger.info("[SIS] processFleetReport");

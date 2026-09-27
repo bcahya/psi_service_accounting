@@ -55,6 +55,22 @@ public class SISController {
 	}
 	
 	@ResponseBody
+	@RequestMapping(value = "/processMT940Temp", method = RequestMethod.POST)
+	SISResponse processMT940Temp(
+//			@RequestParam("m_inventory_id") Integer m_inventory_id
+			) {
+		SISResponse response = new SISResponse();
+
+		try {
+			response = sisService.processMT940Temp();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		return response;
+	}
+	
+	@ResponseBody
 	@RequestMapping(value = "/processFleetReport", method = RequestMethod.POST)
 	SISResponse processFleetReport(
 //			@RequestParam("m_inventory_id") Integer m_inventory_id
