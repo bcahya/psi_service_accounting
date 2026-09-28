@@ -504,6 +504,7 @@ public class SISGlobalExecute {
 	        	LinkedHashMap<String, Object> mapDetail = new LinkedHashMap<>();
 	        	mapDetail.put("bbm", BigDecimal.ZERO);
 	        	mapDetail.put("tol", BigDecimal.ZERO);
+	        	mapDetail.put("parkir", BigDecimal.ZERO);
 	        	mapDetail.put("total", BigDecimal.ZERO);
 	        	mapDetail.put("desc", "");
 	        	mapDetail.put("desc_bbm", "");
