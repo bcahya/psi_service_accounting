@@ -470,6 +470,7 @@ public class SISGlobalExecute {
 		u = new SISUtil(source, sisApiProperties, transactionManager);
 		int chargeTolID = u.getIntSysconfig(SISConstants.SIS_FLEET_CHARGE_TOL_ID, true);
     	int chargeBBMID = u.getIntSysconfig(SISConstants.SIS_FLEET_CHARGE_BBM_ID, true);
+    	int chargeParkirID = u.getIntSysconfig(SISConstants.SIS_FLEET_CHARGE_PARKIR_ID, true);
     	int pricelistID = u.getIntSysconfig(SISConstants.SIS_FLEET_PRICE_LIST_ID, true);
     	int taxID = u.getIntSysconfig(SISConstants.SIS_FLEET_TAX_ID, true);
     	int paymentTermID = u.getIntSysconfig(SISConstants.SIS_FLEET_PAYMENT_TERM_ID, true);
@@ -498,16 +499,17 @@ public class SISGlobalExecute {
         		
         	BigDecimal amt = fleet.getNominal();
 	        String dates = SISUtil.getStringDate(fleet.getTimestamp());
-	        boolean isBBM = fleet.getTerminal().toLowerCase().contains("spbu");
 	        String key = c_bankaccount_id + del + dates;
 	        if (!mapFleet.containsKey(key)) {
 	        	LinkedHashMap<String, Object> mapDetail = new LinkedHashMap<>();
 	        	mapDetail.put("bbm", BigDecimal.ZERO);
 	        	mapDetail.put("tol", BigDecimal.ZERO);
+	        	mapDetail.put("parkir", BigDecimal.ZERO);
 	        	mapDetail.put("total", BigDecimal.ZERO);
 	        	mapDetail.put("desc", "");
 	        	mapDetail.put("desc_bbm", "");
 	        	mapDetail.put("desc_tol", "");
+	        	mapDetail.put("desc_parkir", "");
 	        	mapFleet.put(key, mapDetail);
 	        }
 	        LinkedHashMap<String, Object> mapDetail = mapFleet.get(key);
@@ -518,7 +520,7 @@ public class SISGlobalExecute {
 	        desc += fleet.getTerminal();
 	        mapDetail.put("desc", desc);
 	        mapDetail.put("total", SISUtil.getBigDecimal(mapDetail.get("total")).add(amt));
-        	if (isBBM) {
+        	if (fleet.getTerminal().toLowerCase().contains("spbu")) {
 	        	mapDetail.put("bbm", SISUtil.getBigDecimal(mapDetail.get("bbm")).add(amt));
 	        	desc = String.valueOf(mapDetail.get("desc_bbm"));
 		        if (!SISUtil.cekIsNull(desc)) {
@@ -526,7 +528,8 @@ public class SISGlobalExecute {
 		        }
 		        desc += fleet.getTerminal();
 		        mapDetail.put("desc_bbm", desc);
-	        } else {
+	        } else if (fleet.getTerminal().toLowerCase().contains("epj")
+	        		|| fleet.getTerminal().toLowerCase().contains("eph")){
 	        	mapDetail.put("tol", SISUtil.getBigDecimal(mapDetail.get("tol")).add(amt));
 	        	desc = String.valueOf(mapDetail.get("desc_tol"));
 		        if (!SISUtil.cekIsNull(desc)) {
@@ -534,6 +537,14 @@ public class SISGlobalExecute {
 		        }
 		        desc += fleet.getTerminal();
 		        mapDetail.put("desc_tol", desc);
+	        } else {
+	        	mapDetail.put("parkir", SISUtil.getBigDecimal(mapDetail.get("parkir")).add(amt));
+	        	desc = String.valueOf(mapDetail.get("desc_parkir"));
+		        if (!SISUtil.cekIsNull(desc)) {
+		        	desc += ", ";
+		        }
+		        desc += fleet.getTerminal();
+		        mapDetail.put("desc_parkir", desc);
 	        }
 	    }
         
@@ -698,6 +709,11 @@ public class SISGlobalExecute {
 			if (mapDetail.containsKey("tol") && SISUtil.getBigDecimal(mapDetail.get("tol")).signum() > 0) {
 				line += 10;
 				generateInvLineFleet(colInvLines, mapDetail, now, "tol", userID, c_invoice_id, line, chargeTolID,
+						taxID, c_costcenter_id);
+			}
+			if (mapDetail.containsKey("parkir") && SISUtil.getBigDecimal(mapDetail.get("parkir")).signum() > 0) {
+				line += 10;
+				generateInvLineFleet(colInvLines, mapDetail, now, "parkir", userID, c_invoice_id, line, chargeParkirID,
 						taxID, c_costcenter_id);
 			}
 
