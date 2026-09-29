@@ -304,7 +304,7 @@ public class SISUtil {
 			) throws Exception {
 		Object o = getObject(tableName, colParam, colName+"::int", value);
 		if (o == null && isThrowError) {
-			throw new Exception(tableName +" ("+colParam+ ": " + String.valueOf(value) +") not found!");
+			throw new Exception(tableName + " [" + colName + "] - " +" ("+colParam+ ": " + String.valueOf(value) +") not found!");
 		}
 		if (o != null) {
 			return (int)o;
