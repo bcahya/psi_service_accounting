@@ -11,6 +11,7 @@ public class SISConstants {
 	
 	public static String SIS_FLEET_CHARGE_TOL_ID = "SIS_FLEET_CHARGE_TOL_ID";
 	public static String SIS_FLEET_CHARGE_BBM_ID = "SIS_FLEET_CHARGE_BBM_ID";
+	public static String SIS_FLEET_CHARGE_PARKIR_ID = "SIS_FLEET_CHARGE_PARKIR_ID";
 	public static String SIS_FLEET_PRICE_LIST_ID = "SIS_FLEET_PRICE_LIST_ID";
 	public static String SIS_FLEET_TAX_ID = "SIS_FLEET_TAX_ID";
 	public static String SIS_FLEET_PAYMENT_TERM_ID = "SIS_FLEET_PAYMENT_TERM_ID";
