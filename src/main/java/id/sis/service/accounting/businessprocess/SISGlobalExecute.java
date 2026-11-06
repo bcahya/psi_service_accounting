@@ -24,6 +24,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.prowidesoftware.swift.io.parser.SwiftParser;
+import com.prowidesoftware.swift.model.SwiftBlock1;
 import com.prowidesoftware.swift.model.SwiftMessage;
 import com.prowidesoftware.swift.model.field.Field61;
 import com.prowidesoftware.swift.model.field.Field86;
@@ -351,6 +352,18 @@ public class SISGlobalExecute {
         
         List<Integer> listBSID = new ArrayList<Integer>();
         for (MT940 mt940: listMT940) {
+        	boolean isScale = false;
+        	SwiftBlock1 block1 = mt940.getSwiftMessage().getBlock1();
+        	if (block1 != null) {
+        		String identifier = block1.getLogicalTerminal();
+        		if (identifier != null) {
+        			identifier = identifier.trim().toUpperCase();
+        			if (identifier.contains("BCA")) {
+        				isScale = true;
+        			}
+        		}
+        	}
+        	
         	String accountNo = mt940.getField25().getAccount();
 	        List<String> listDesc = new ArrayList<>();
 	        for (Field86 f86: mt940.getField86()) {
@@ -368,7 +381,10 @@ public class SISGlobalExecute {
 	            
 	            String desc = listDesc.get(count-1).replace("'", "''");
 	            Timestamp ts = SISUtil.getDateyyMMdd(transactionDate);
-	        	BigDecimal amt = SISUtil.getBigDecimal(transactionAmount).movePointLeft(2).setScale(2);
+	            BigDecimal amt = SISUtil.getBigDecimal(transactionAmount);
+	            if (isScale) {
+	            	amt = amt.movePointLeft(2).setScale(2);	
+	            }
 	        	if (debitCreditMark.equalsIgnoreCase("D")) {
 	        		amt = amt.negate();
 	        	}
