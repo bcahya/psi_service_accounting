@@ -24,8 +24,8 @@ public class SIS_FleetReportParser {
             "(\\d{2}/\\d{2}/\\d{2})\\s+" +  // tanggal
             "Rp\\s+" +
             "([\\d,]+\\.\\d{2})\\s+" +      // nominal
-            "(.+?)\\s+" +                   // terminal
-            "(\\d+)\\s*$"                    // kode
+            "(.+?)" +                        // terminal
+            "(?:\\s+(\\d+))?\\s*$"            // kode (optional)
     );
 
     private static final Pattern TIME_LINE = Pattern.compile(
