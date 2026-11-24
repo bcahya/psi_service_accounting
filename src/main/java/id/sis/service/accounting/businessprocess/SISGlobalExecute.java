@@ -536,7 +536,12 @@ public class SISGlobalExecute {
 	        desc += fleet.getTerminal();
 	        mapDetail.put("desc", desc);
 	        mapDetail.put("total", SISUtil.getBigDecimal(mapDetail.get("total")).add(amt));
-        	if (fleet.getTerminal().toLowerCase().contains("spbu")) {
+        	if (fleet.getTerminal().toLowerCase().contains("spbu")
+        			|| fleet.getTerminal().toLowerCase().contains("e2i")
+        			|| fleet.getTerminal().toLowerCase().contains("ex1")
+        			|| fleet.getTerminal().toLowerCase().contains("e0f")
+        			|| fleet.getTerminal().toLowerCase().contains("e2e")
+			) {
 	        	mapDetail.put("bbm", SISUtil.getBigDecimal(mapDetail.get("bbm")).add(amt));
 	        	desc = String.valueOf(mapDetail.get("desc_bbm"));
 		        if (!SISUtil.cekIsNull(desc)) {
